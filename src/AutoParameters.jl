@@ -1,6 +1,6 @@
 module AutoParameters
 
-export AutoParm
+export @AutoParm
 
 using MacroTools
 
