@@ -1,0 +1,4 @@
+name = "AutoParameters"
+uuid = "2688778c-3549-4980-b6fe-7a9ff5c92ab2"
+authors = ["Daniel Cocks <daniel.cocks@gmail.com>"]
+version = "0.1.0"
