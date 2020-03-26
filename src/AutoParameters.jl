@@ -108,7 +108,7 @@ macro AutoParm(expr)
                 $e_name($(out_args[1:end-1]...)) where {$(e_full_Tstruct...)} = $e_name($(e_out_fields[1:end-1]...), $(e_out_defaults[end]))
             end
         else
-            defaults_arg_expr = :(;)
+            defaults_arg_expr = :(begin end)
         end
 
         defaults_kwd_expr = quote
