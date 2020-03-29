@@ -83,6 +83,7 @@ macro AutoParm(expr)
         e_full_Tstruct = esc.(full_Tstruct)
         e_Tstruct = esc.(Tstruct)
         e_name = esc(name)
+        e_create_name = esc(Symbol(:_Create,name))
         e_out_fields = esc.(out_fields)
         e_out_defaults = esc.(out_defaults)
 
@@ -112,7 +113,8 @@ macro AutoParm(expr)
         end
 
         defaults_kwd_expr = quote
-            $e_name(; $(out_kwds...)) where {$(e_full_Tstruct...)} = $e_name($(e_out_fields...))
+            $e_create_name(; $(out_kwds...)) where {$(e_full_Tstruct...)} = $e_name($(e_out_fields...))
+            $e_name(; kwds...) where {$(e_full_Tstruct...)} = $e_create_name(; kwds...)
         end
 
         # defaults_dict = Dict{Symbol,Any}(name.args[] => default for  (name,default) in zip(out_fields,out_defaults) if default != nothing)
