@@ -157,11 +157,17 @@ macro AutoParm(expr)
         # This is to allow for convert(T, x) by default. This is to try and
         # match with the default hidden constructor in Julia, although that
         # constructor is only defined for non-parameteric types.
-        convert_expr = map(e_out_fields,e_out_supertypes) do name,super
-            :(convert($super, $name))
-        end
-        fallback_convert_expr = @q begin
-            $e_name($(e_out_fields...)) = $e_name($(convert_expr...))
+
+        # But only do this if there is at least one type which is not Any. Otherwise, this will hit an endless loop.
+        if all(==(Any), out_supertypes)
+            fallback_convert_expr = nothing
+        else
+            convert_expr = map(e_out_fields,e_out_supertypes) do name,super
+                :(convert($super, $name))
+            end
+            fallback_convert_expr = @q begin
+                $e_name($(e_out_fields...)) = $e_name($(convert_expr...))
+            end
         end
 
         expr = :(
