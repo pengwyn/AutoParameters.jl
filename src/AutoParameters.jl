@@ -108,6 +108,7 @@ macro AutoParm(expr)
         e_create_name = esc(Symbol(:_Create,name))
         e_out_fields = esc.(out_fields)
         e_out_defaults = esc.(out_defaults)
+        e_out_supertypes = esc.(out_supertypes)
 
         out_fields_typed = [:($field::$T) for (field,T) in zip(out_fields, out_types)]
         out_fields_typed_defaults = [default == nothing ? var : Expr(:kw, var, default)
@@ -145,7 +146,7 @@ macro AutoParm(expr)
         defaults_kwd_expr = @q begin
             # $e_create_name(; $(out_kwds...)) where {$(e_full_Tstruct...)} = $e_name($(e_out_fields...))
             # $e_name(; kwds...) where {$(e_full_Tstruct...)} = $e_create_name(; kwds...)
-            $e_create_name(; $(out_fields_defaults...)) = $e_name($(e_out_fields...))
+            $e_create_name(; $(e_out_fields_defaults...)) = $e_name($(e_out_fields...))
             $e_name(; kwds...) = $e_create_name(; kwds...)
         end
 
@@ -156,11 +157,11 @@ macro AutoParm(expr)
         # This is to allow for convert(T, x) by default. This is to try and
         # match with the default hidden constructor in Julia, although that
         # constructor is only defined for non-parameteric types.
-        convert_expr = map(out_fields,out_supertypes) do name,super
+        convert_expr = map(e_out_fields,e_out_supertypes) do name,super
             :(convert($super, $name))
         end
         fallback_convert_expr = @q begin
-            $e_name($(out_fields...)) = $e_name($(convert_expr...))
+            $e_name($(e_out_fields...)) = $e_name($(convert_expr...))
         end
 
         expr = :(
