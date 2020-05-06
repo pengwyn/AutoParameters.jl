@@ -53,11 +53,13 @@ macro AutoParm(expr)
 
         extra_params = []
         extra_params_subtype = []
+        extra_params_supertype = []
         extra_constructor = []
 
         out_fields = []
         out_types = []
         out_defaults = []
+        out_supertypes = []
 
         fields = map(enumerate(fields)) do (ind,field)
             # # This is for something dodgy I wanted to do once
@@ -75,20 +77,25 @@ macro AutoParm(expr)
 
             if T == nothing
                 T = Any
+                Tsuper = Any
             elseif T == :AUTO
                 T = Symbol(uppercase.("T_$(fieldname)"))
                 if Tsuper != nothing
                     typeinfo = :($T <: $Tsuper)
                 else
                     typeinfo = T
+                    Tsuper = Any
                 end
                 push!(extra_params, T)
                 push!(extra_params_subtype, typeinfo)
                 # push!(extra_constructor, :(typeof(args[$ind])))
+            else
+                Tsuper = T
             end
 
             push!(out_fields, fieldname)
             push!(out_types, T)
+            push!(out_supertypes, Tsuper)
             push!(out_defaults, default)
 
             :($fieldname::$T)
@@ -105,8 +112,13 @@ macro AutoParm(expr)
         out_fields_typed = [:($field::$T) for (field,T) in zip(out_fields, out_types)]
         out_fields_typed_defaults = [default == nothing ? var : Expr(:kw, var, default)
                                      for (var,default) in zip(out_fields_typed, out_defaults)]
+
+        out_fields_defaults = [default == nothing ? var : Expr(:kw, var, default)
+                                     for (var,default) in zip(out_fields, out_defaults)]
+
         e_out_fields_typed = esc.(out_fields_typed)
         e_out_fields_typed_defaults = esc.(out_fields_typed_defaults)
+        e_out_fields_defaults = esc.(out_fields_defaults)
 
         # out_kwds = [(default == nothing ? name : Expr(:kw, name, esc(default))) for (name,default) in zip(e_out_fields,out_defaults)]
         out_kwds = e_out_fields_typed_defaults
@@ -128,14 +140,28 @@ macro AutoParm(expr)
             defaults_arg_expr = nothing
         end
 
-        defaults_kwd_expr = quote
-            $e_create_name(; $(out_kwds...)) where {$(e_full_Tstruct...)} = $e_name($(e_out_fields...))
-            $e_name(; kwds...) where {$(e_full_Tstruct...)} = $e_create_name(; kwds...)
+        # This is a bit of crass relabelling just so we can always have a keywords method which is not overwritten
+        # I.e. we can redefine CLASS(a=1,b=2) to call _CreateCLASS(; real_field_a=a, real_field_b=b+1, ...)
+        defaults_kwd_expr = @q begin
+            # $e_create_name(; $(out_kwds...)) where {$(e_full_Tstruct...)} = $e_name($(e_out_fields...))
+            # $e_name(; kwds...) where {$(e_full_Tstruct...)} = $e_create_name(; kwds...)
+            $e_create_name(; $(out_fields_defaults...)) = $e_name($(e_out_fields...))
+            $e_name(; kwds...) = $e_create_name(; kwds...)
         end
 
         # defaults_dict = Dict{Symbol,Any}(name.args[] => default for  (name,default) in zip(out_fields,out_defaults) if default != nothing)
         defaults_dict_inner = [:($(QuoteNode(name)) => ()->$default) for (name,default) in zip(out_fields,out_defaults) if default != nothing]
         defaults_dict = :(Dict{Symbol,Any}($(defaults_dict_inner...)))
+
+        # This is to allow for convert(T, x) by default. This is to try and
+        # match with the default hidden constructor in Julia, although that
+        # constructor is only defined for non-parameteric types.
+        convert_expr = map(out_fields,out_supertypes) do name,super
+            :(convert($super, $name))
+        end
+        fallback_convert_expr = @q begin
+            $e_name($(out_fields...)) = $e_name($(convert_expr...))
+        end
 
         expr = :(
             mutable struct $e_name{$(e_full_Tstruct...)}
@@ -151,6 +177,7 @@ macro AutoParm(expr)
             $expr
 
             $defaults_arg_expr
+            $fallback_convert_expr
             $defaults_kwd_expr
             
             # $type_constructor_expr
