@@ -2,7 +2,21 @@ module AutoParameters
 
 export @AutoParm
 
-using MacroTools
+using MacroTools: @capture, @q, block, postwalk, isexpr, striplines
+
+# Convenient iteration flatten
+# My version of flatten1, which doesn't remove blocks at the top level (this ruins structs)
+function my_flatten1(ex)
+  isexpr(ex, :block) || return ex
+  #ex′ = :(;)
+  ex′ = Expr(:block)
+  for x in ex.args
+    isexpr(x, :block) ? append!(ex′.args, x.args) : push!(ex′.args, x)
+  end
+  return ex′
+end
+iterflatten(ex) = postwalk(my_flatten1, block(ex)).args
+
 
 ##############################
 # * AutoParm
@@ -13,7 +27,8 @@ macro AutoParm(expr)
     # x = @__MODULE__
     # @show expr __module__ x
     expr = macroexpand(__module__, expr)
-    expr = MacroTools.postwalk(expr) do expr
+    # expr = MacroTools.postwalk(expr) do expr
+    args = map(iterflatten(expr)) do expr
         if @capture (expr) (mutable struct combname_ fields__ end)
             ismutable = true
         elseif @capture (expr) (struct combname_ fields__ end)
@@ -105,11 +120,12 @@ macro AutoParm(expr)
             out_args = copy(out_kwds) |> Vector{Any}
             out_args[1:last_mandatory] = e_out_fields_typed[1:last_mandatory]
 
-            defaults_arg_expr = quote
+            defaults_arg_expr = @q begin
                 $e_name($(out_args[1:end-1]...)) where {$(e_full_Tstruct...)} = $e_name($(e_out_fields[1:end-1]...), $(e_out_defaults[end]))
             end
         else
-            defaults_arg_expr = :(begin end)
+            # defaults_arg_expr = :(begin end)
+            defaults_arg_expr = nothing
         end
 
         defaults_kwd_expr = quote
@@ -129,8 +145,9 @@ macro AutoParm(expr)
         if SUPER != nothing
             expr.args[2] = :($(expr.args[2]) <: $(esc(SUPER)))
         end
+        expr = striplines(expr)
 
-        quote
+        @q begin
             $expr
 
             $defaults_arg_expr
@@ -144,6 +161,8 @@ macro AutoParm(expr)
     if count != 1
         error("Does not match the form expected - $count")
     end
+
+    expr = Expr(:block, args...)
 
     return expr
 end
