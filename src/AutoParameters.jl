@@ -22,6 +22,15 @@ iterflatten(ex) = postwalk(my_flatten1, block(ex)).args
 # * AutoParm
 #----------------------------
 
+"""
+TryConvert
+
+This is used to convert (if necessary) the arguments to a conforming type,
+allowing for more flexible automatic type choosing.
+"""
+TryConvert(val::T, ::Type{T_SUPER}) where {T_SUPER, T <: T_SUPER} = val
+TryConvert(val::T, ::Type{T_SUPER}) where {T_SUPER, T} = convert(T_SUPER, val)
+
 macro AutoParm(expr)
     count = 0
     # x = @__MODULE__
@@ -146,8 +155,11 @@ macro AutoParm(expr)
         defaults_kwd_expr = @q begin
             # $e_create_name(; $(out_kwds...)) where {$(e_full_Tstruct...)} = $e_name($(e_out_fields...))
             # $e_name(; kwds...) where {$(e_full_Tstruct...)} = $e_create_name(; kwds...)
-            $e_create_name(; $(e_out_fields_defaults...)) = $e_name($(e_out_fields...))
-            $e_name(; kwds...) = $e_create_name(; kwds...)
+            $e_create_name(thetype=$e_name ; $(e_out_fields_defaults...)) = thetype($(e_out_fields...))
+            # $e_name(; kwds...) = $e_create_name(; kwds...)
+            (::$Type{T})(; kwds...) where {T<:$e_name} = $e_create_name(T; kwds...)
+            # TODO: Perhaps introduce the cascade of partially applied types, to
+            # then put in the most narrow type until a concrete T is reached.
         end
 
         # defaults_dict = Dict{Symbol,Any}(name.args[] => default for  (name,default) in zip(out_fields,out_defaults) if default != nothing)
@@ -160,6 +172,8 @@ macro AutoParm(expr)
 
         # But only do this if there is at least one type which is not Any. Otherwise, this will hit an endless loop.
         if all(==(Any), out_supertypes)
+            fallback_convert_expr = nothing
+        elseif isempty(full_Tstruct)
             fallback_convert_expr = nothing
         else
             convert_expr = map(e_out_fields,e_out_supertypes) do name,super
