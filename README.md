@@ -7,11 +7,11 @@ The default values can also be accessed through `AUTOPARM_<name>_defaults`.
 
 For example:
 
-```
+```julia
 julia> @AutoParm struct TEST
-       a::AUTO <: AbstractArray{Float64} = [1,2,3]
-       b::AUTO <: Real
-       c::Int = 3
+           a::AUTO <: AbstractArray{Float64} = [1,2,3]
+           b::AUTO <: Real
+           c::Int = 3
        end
 
 julia> TEST(b=1)
@@ -24,7 +24,7 @@ TEST{Array{Float64,1},Int64}([1.0], 0, 3)
 
 The generated code looks like:
 
-```
+```julia
 julia> using MacroTools
 
 julia> @expand @AutoParm struct TEST
