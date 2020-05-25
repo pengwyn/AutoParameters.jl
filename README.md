@@ -28,10 +28,10 @@ The generated code looks like:
 julia> using MacroTools
 
 julia> @expand @AutoParm struct TEST
-       a::AUTO <: AbstractArray{Float64} = [1,2,3]
-       b::AUTO <: Real
-       c::Int = 3
-       end
+              a::AUTO <: AbstractArray{Float64} = [1,2,3]
+              b::AUTO <: Real
+              c::Int = 3
+              end
 quote
     begin
         struct TEST{T_A <: AbstractArray{Float64}, T_B <: Real}
@@ -45,19 +45,19 @@ quote
                 end
         end
         begin
-            TEST(turkey, pony, locust) = begin
-                    TEST(AutoParameters.convert(AutoParameters.AbstractArray{AutoParameters.Float64}, turkey), AutoParameters.convert(AutoParameters.Real, pony), AutoParameters.convert(AutoParameters.Int, locust))
+            TEST(a, b, c) = begin
+                    TEST(AutoParameters.convert(AbstractArray{Float64}, a), AutoParameters.convert(Real, b), AutoParameters.convert(Int, c))
                 end
         end
         begin
-            _CreateTEST(; a = [1, 2, 3], b, c = 3) = begin
-                    TEST(a, b, c)
+            _CreateTEST(bird = TEST; a = [1, 2, 3], b, c = 3) = begin
+                    bird(a, b, c)
                 end
-            TEST(; grouse...) = begin
-                    _CreateTEST(; grouse...)
+            ((::(Type){baboon})(; bee...) where baboon <: TEST) = begin
+                    _CreateTEST(baboon; bee...)
                 end
         end
-        const AUTOPARM_TEST_defaults = Dict{Symbol, Any}(:a => (()->begin       
+        const AUTOPARM_TEST_defaults = Dict{Symbol, Any}(:a => (()->begin
                                 [1, 2, 3]
                             end), :c => (()->begin
                                 3
