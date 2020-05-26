@@ -68,3 +68,29 @@ TEST(; kwds...) = WidestParamType(TEST)(; kwds...)
     @test typeof(specific.real) == Int
     @test typeof(specific.thing) == Nothing
 end
+
+
+# Package code:
+@AutoParm mutable struct PARAMS
+    grid::AUTO <: AbstractVector
+    scale_factor::Float64 = 5.0
+    some_function::AUTO <: Union{Nothing,Function} = nothing
+end
+
+function PARAMS(; overall_style=:something_complex)
+    complex_calculation = [1,2,3]
+    WidestParamType(PARAMS)(grid=complex_calculation)
+end
+Finalise(x::PARAMS) = PARAMS(fieldvalues(x)...)
+
+@testset "Example from the README" begin
+    obj = PARAMS(overall_style=:specific_thing)
+    # Include a special function
+    MyUpdate(x) = println("Updating x!")
+    obj.some_function = MyUpdate
+    obj.grid = obj.scale_factor * LinRange(0,1,101)
+    obj2 = Finalise(obj)
+
+    @test typeof(obj) == PARAMS{AbstractVector,Union{Nothing,Function}}
+    @test typeof(obj2) == PARAMS{LinRange{Float64}, typeof(MyUpdate)}
+end

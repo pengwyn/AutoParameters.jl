@@ -1,9 +1,18 @@
 # AutoParameters.jl
-A combination of automatic parameterised types and default values for structs
+A combination of automatic parameterised types and default values for structs.
+The main use case for me is to allow for dispatching on a struct of parameters,
+rather than separate function arguments.
 
-Use `@AutoParm` in front of a struct. This will create a default keyword-only constructor and a pure value constructor. A backup `_Create<name>` is also created to allow for overwriting of the default keyword-only constructor.
-
-The default values can also be accessed through `AUTOPARM_<name>_defaults`.
+To use, put `@AutoParm` in front of a struct. This will create a default
+keyword-only constructor and a pure value constructor. Each field can be
+designated as an `AUTO` type, which will add it to the struct parameters with a
+generated name. These can also be indicated to be a subtype. Syntax:
+ 
+```julia
+@AutoParm struct MyType
+    field::AUTO <: SuperType = default values
+end
+```
 
 For example:
 
@@ -22,7 +31,69 @@ TEST{Array{Float64,1},Int64}([1.0], 0, 3)
 
 ```
 
-The generated code looks like:
+As I often create structs with some kind of complex defaults, but I don't want
+to be locked into the parameters of the type when the defaults are being set, a
+`WidestParamType` is available. It is meant to be used in this style:
+
+```julia
+# Package code:
+@AutoParm mutable struct PARAMS
+    grid::AUTO <: AbstractVector
+    scale_factor::Float64 = 5.0
+    some_function::AUTO <: Union{Nothing,Function} = nothing
+end
+
+function PARAMS(; overall_style=:something_complex)
+    complex_calculation = [1,2,3]
+    WidestParamType(PARAMS)(grid=complex_calculation)
+end
+Finalise(x::PARAMS) = PARAMS(fieldvalues(x)...)
+```
+
+and then the user code can do something like:
+
+```julia
+# Initial default struct
+obj = PARAMS(overall_style=:specific_thing)
+
+# Changing settings
+obj.grid = obj.scale_factor * LinRange(0,1,101)
+MyUpdate(x) = println("Updating x!")
+obj.some_function = MyUpdate
+
+# Finalise the object to be the narrowest types
+obj2 = Finalise(obj)
+
+typeof(obj) == PARAMS{AbstractVector,Union{Nothing,Function}}
+typeof(obj2) == PARAMS{LinRange{Float64}, typeof(MyUpdate)}
+```
+
+This means that any function using a `PARAMS` object will dispatch knowing that
+it has an interesting `some_function` and a `LinRange` for the grid, however I
+wasn't locked into this when creating the initial object. I was also able to use
+a default value from the object (`scale_factor`) in updating the object.
+ 
+## Other generated items
+
+A backup constructor `_Create<name>` is also generated to allow for overwriting
+of the default keyword-only constructor. This allows for:
+
+```julia
+MyType(; special) = _CreateMyType(; fieldone=special, fieldtwo="nothing")
+```
+
+The default values can also be accessed through `AUTOPARM_<name>_defaults`:
+
+```julia
+AUTOPARM_TEST_defaults[:a]() == [1,2,3]
+```
+
+Note that these defaults are themselves functions. This is to mimic keyword
+functions, avoiding contamination of default values between function calls.
+
+## Generated code
+
+For the first example, the generated code looks like:
 
 ```julia
 julia> using MacroTools
