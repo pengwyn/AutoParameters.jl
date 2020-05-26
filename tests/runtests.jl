@@ -8,7 +8,7 @@ using IterTools: fieldvalues
     arr::AUTO <: AbstractArray{Float64} = [1,2,3]
     unknown
     real::AUTO <: Real
-    int::Int = arr[1]
+    int::Int = 3
     thing::AUTO = "something"
 end
 
@@ -95,4 +95,37 @@ Finalise(x::PARAMS) = PARAMS(fieldvalues(x)...)
 
     @test typeof(obj) == PARAMS{AbstractVector,Union{Nothing,Function}}
     @test typeof(obj2) == PARAMS{LinRange{Float64}, typeof(MyUpdate)}
+end
+
+
+@AutoParm struct TEST_REUSE
+    arr::Vector{Float64} = [1,2,3]
+    val::Int = arr[1]
+end
+
+@testset "Default reuse" begin
+    obj = TEST_REUSE()
+    @test obj.val == 1
+
+    obj = TEST_REUSE([1.0,2.0,3.0])
+    @test obj.val == 1
+
+    @test_throws InexactError TEST_REUSE([1.5,2.5])
+end
+
+@AutoParm struct TEST_PREDEF{T <: Real,T2}
+    one::T
+    two::AUTO <: AbstractVector{T}
+    three::T2
+end
+@testset "Mixing predefined parameters" begin
+    obj = TEST_PREDEF(1, [2,3,4], "asdf")
+    @test typeof(obj) == TEST_PREDEF{Int,String,Vector{Int}}
+
+    # Note: need to explicitly put in T2 here as well.
+    @test_broken obj = TEST_PREDEF{Float64,Any}(one=1.0, two=[2.0,3.0,4.0], three="asdf")
+    # @test typeof(obj) == TEST_PREDEF{Float64,String,Vector{Float64}}
+
+    # TODO: This should be fixed to convert as well
+    @test_broken TEST_PREDEF{Float64}(1, [2,3,4], "asdf")
 end

@@ -136,3 +136,26 @@ quote
     end
 end
 ```
+
+## Other things
+
+* You can mix normal parameters and `AUTO` parameters. The `AUTO` parameters
+  will be added to the end of the list of parameters. For example:
+  
+```julia
+@AutoParm struct TEST_PREDEF{T <: Real,T2}
+    one::T
+    two::AUTO <: AbstractVector{T}
+    three::T2
+end
+```
+
+* As in keyword arguments for functions, you may reuse variable names in
+  defaults:
+
+```julia
+@AutoParm struct TEST_REUSE
+    arr::Vector{Float64} = [1,2,3]
+    val::Int = arr[1]
+end
+```
