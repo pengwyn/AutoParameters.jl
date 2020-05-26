@@ -48,16 +48,9 @@ TEST(; common) = _CreateTEST(arr=[common], unknown=common, real=common)
 end
 
 # This creates an instance of TEST with the widest types as parameters.
-function TEST(; kwds...)
-    thetype = TEST
-    while !isconcretetype(thetype)
-        thetype = thetype{thetype.var.ub}
-    end
+TEST(; kwds...) = WidestParamType(TEST)(; kwds...)
 
-    thetype(; kwds...)
-end
-
-@testset "Defining general then specifying" begin
+@testset "Defining wide then narrowing" begin
     general = TEST(unknown=nothing, real=1.0)
     @test typeof(general) == TEST{AbstractArray{Float64}, Real, Any}
     @test typeof(general.arr) == Vector{Float64}

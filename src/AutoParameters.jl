@@ -1,6 +1,7 @@
 module AutoParameters
 
-export @AutoParm
+export @AutoParm,
+    WidestParamType
 
 using MacroTools: @capture, @q, block, postwalk, isexpr, striplines
 
@@ -215,6 +216,13 @@ macro AutoParm(expr)
     return expr
 end
 
+
+function WidestParamType(thetype)
+    while !isconcretetype(thetype)
+        thetype = thetype{thetype.var.ub}
+    end
+    thetype
+end
 
 
 end # module
