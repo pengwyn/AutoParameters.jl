@@ -1,12 +1,14 @@
 using Test
 using AutoParameters
 
+using IterTools: fieldvalues
+
 
 @AutoParm mutable struct TEST
     arr::AUTO <: AbstractArray{Float64} = [1,2,3]
     unknown
     real::AUTO <: Real
-    int::Int = 3
+    int::Int = arr[1]
     thing::AUTO = "something"
 end
 
