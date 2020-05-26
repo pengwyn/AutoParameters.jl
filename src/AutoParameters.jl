@@ -112,8 +112,15 @@ macro AutoParm(expr)
         end
 
         full_Tstruct = (Tstruct..., extra_params_subtype...)
+        Tstruct_names = map(Tstruct) do item
+            item isa Symbol && return item
+            @assert item.head == :<:
+            return item.args[1]
+        end
+
         e_full_Tstruct = esc.(full_Tstruct)
         e_Tstruct = esc.(Tstruct)
+        e_Tstruct_names = esc.(Tstruct_names)
         e_name = esc(name)
         e_create_name = esc(Symbol(:_Create,name))
         e_out_fields = esc.(out_fields)
@@ -157,15 +164,40 @@ macro AutoParm(expr)
             # $e_create_name(; $(out_kwds...)) where {$(e_full_Tstruct...)} = $e_name($(e_out_fields...))
             # $e_name(; kwds...) where {$(e_full_Tstruct...)} = $e_create_name(; kwds...)
             $e_create_name(thetype=$e_name ; $(e_out_fields_defaults...)) = thetype($(e_out_fields...))
+            # $e_create_name(; kwds...) = $e_create_name($e_name ; kwds...)
             # $e_name(; kwds...) = $e_create_name(; kwds...)
             (::$Type{T})(; kwds...) where {T<:$e_name} = $e_create_name(T; kwds...)
             # TODO: Perhaps introduce the cascade of partially applied types, to
             # then put in the most narrow type until a concrete T is reached.
         end
+        
+        # args = map(0:length(Tstruct)) do num_T
+        #     this_names = Tstruct_names[1:num_T]
+        #     missing_names = Tstruct_names[num_T+1:end]
+        #     if num_T >= 1
+        #         T = :($e_name{$(esc.(this_names[1:num_T])...)})
+        #     else
+        #         T = e_name
+        #     end
+        #     where_expr = e_Tstruct[1:num_T]
+        #     convert_expr = map(out_fields,out_supertypes) do name,super
+        #         if (super ∈ missing_names)
+        #             esc(name)
+        #         else
+        #             :(convert($(esc(super)), $(esc(name))))
+        #         end
+        #     end
+        #     @q begin
+        #         $e_create_name(::$Type{T} ; $(e_out_fields_defaults...)) where {$(where_expr...), T <: $T} = T($(convert_expr...))
+        #     end
+        # end
+        # push!(defaults_kwd_expr.args, args...)
 
         # defaults_dict = Dict{Symbol,Any}(name.args[] => default for  (name,default) in zip(out_fields,out_defaults) if default != nothing)
+
         defaults_dict_inner = [:($(QuoteNode(name)) => ()->$default) for (name,default) in zip(out_fields,out_defaults) if default != nothing]
         defaults_dict = :(Dict{Symbol,Any}($(defaults_dict_inner...)))
+
 
         # This is to allow for convert(T, x) by default. This is to try and
         # match with the default hidden constructor in Julia, although that
@@ -185,6 +217,25 @@ macro AutoParm(expr)
             end
         end
 
+        # And one variety for all explicit parameters, filling in the remainder
+        # TODO: Broken! Need to make this consider each extra param separately,
+        # do the attempted conversion, then add it into the specialisation of
+        # the type.
+        # if !isempty(Tstruct) && !isempty(extra_params)
+        #     T = :($e_name{$(e_Tstruct_names...)})
+        #     convert_expr = map(out_fields,out_supertypes) do name,super
+        #         :(convert($(esc(super)), $(esc(name))))
+        #     end
+
+        #     explicit_convert_expr = @q begin
+        #         # (::$Type{T})($(e_out_fields_defaults...)) where {$(e_Tstruct...), T <: $T} = T($(convert_expr...))
+        #         $T($(e_out_fields_defaults...)) where {$(e_Tstruct...)} = $T($(convert_expr...))
+        #     end
+        # else
+            explicit_convert_expr = nothing
+        # end
+
+
         expr = :(
             mutable struct $e_name{$(e_full_Tstruct...)}
             $(esc.(fields)...)
@@ -200,6 +251,7 @@ macro AutoParm(expr)
 
             $defaults_arg_expr
             $fallback_convert_expr
+            $explicit_convert_expr
             $defaults_kwd_expr
             
             # $type_constructor_expr
