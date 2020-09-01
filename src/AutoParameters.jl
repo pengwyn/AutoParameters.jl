@@ -3,7 +3,7 @@ module AutoParameters
 export @AutoParm,
     WidestParamType
 
-using MacroTools: @capture, @q, block, postwalk, isexpr, striplines
+using MacroTools: @capture, @q, block, postwalk, isexpr, striplines, isdef
 
 # Convenient iteration flatten
 # My version of flatten1, which doesn't remove blocks at the top level (this ruins structs)
@@ -33,15 +33,15 @@ TryConvert(val::T, ::Type{T_SUPER}) where {T_SUPER, T <: T_SUPER} = val
 TryConvert(val::T, ::Type{T_SUPER}) where {T_SUPER, T} = convert(T_SUPER, val)
 
 macro AutoParm(expr)
-    count = 0
-    # x = @__MODULE__
-    # @show expr __module__ x
     expr = macroexpand(__module__, expr)
-    # expr = MacroTools.postwalk(expr) do expr
+    AutoParmFunc(expr)
+end
+function AutoParmFunc(expr)
+    count = 0
     args = map(iterflatten(expr)) do expr
-        if @capture (expr) (mutable struct combname_ fields__ end)
+        if @capture (expr) (mutable struct combname_ raw_fields__ end)
             ismutable = true
-        elseif @capture (expr) (struct combname_ fields__ end)
+        elseif @capture (expr) (struct combname_ raw_fields__ end)
             ismutable = false
         else
             # error("Does not match the form expected")
@@ -71,11 +71,20 @@ macro AutoParm(expr)
         out_defaults = []
         out_supertypes = []
 
-        fields = map(enumerate(fields)) do (ind,field)
+        out_functions = []
+
+        fields = []
+
+        for (ind,field) in enumerate(raw_fields)
             # # This is for something dodgy I wanted to do once
             # if @capture (field) ()
             #     continue
             # end
+            if isdef(field)
+                push!(out_functions, field)
+                continue
+            end
+            
             if !@capture (field) (fieldname_::T_ <: Tsuper_ = default_) |
                 (fieldname_::T_ = default_) |
                 (fieldname_ = default_) |
@@ -108,7 +117,7 @@ macro AutoParm(expr)
             push!(out_supertypes, Tsuper)
             push!(out_defaults, default)
 
-            :($fieldname::$T)
+            push!(fields, :($fieldname::$T))
         end
 
         full_Tstruct = (Tstruct..., extra_params_subtype...)
@@ -171,30 +180,6 @@ macro AutoParm(expr)
             # then put in the most narrow type until a concrete T is reached.
         end
         
-        # args = map(0:length(Tstruct)) do num_T
-        #     this_names = Tstruct_names[1:num_T]
-        #     missing_names = Tstruct_names[num_T+1:end]
-        #     if num_T >= 1
-        #         T = :($e_name{$(esc.(this_names[1:num_T])...)})
-        #     else
-        #         T = e_name
-        #     end
-        #     where_expr = e_Tstruct[1:num_T]
-        #     convert_expr = map(out_fields,out_supertypes) do name,super
-        #         if (super ∈ missing_names)
-        #             esc(name)
-        #         else
-        #             :(convert($(esc(super)), $(esc(name))))
-        #         end
-        #     end
-        #     @q begin
-        #         $e_create_name(::$Type{T} ; $(e_out_fields_defaults...)) where {$(where_expr...), T <: $T} = T($(convert_expr...))
-        #     end
-        # end
-        # push!(defaults_kwd_expr.args, args...)
-
-        # defaults_dict = Dict{Symbol,Any}(name.args[] => default for  (name,default) in zip(out_fields,out_defaults) if default != nothing)
-
         defaults_dict_inner = [:($(QuoteNode(name)) => ()->$default) for (name,default) in zip(out_fields,out_defaults) if default != nothing]
         defaults_dict = :(Dict{Symbol,Any}($(defaults_dict_inner...)))
 
@@ -239,6 +224,7 @@ macro AutoParm(expr)
         expr = :(
             mutable struct $e_name{$(e_full_Tstruct...)}
             $(esc.(fields)...)
+            $(esc.(out_functions)...)
             end)
         expr.args[1] = ismutable
         if SUPER != nothing
