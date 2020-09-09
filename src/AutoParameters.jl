@@ -233,7 +233,7 @@ function AutoParmFunc(expr)
         expr = striplines(expr)
 
         @q begin
-            $expr
+            Base.@__doc__ $expr
 
             $defaults_arg_expr
             $fallback_convert_expr
