@@ -50,17 +50,17 @@ function AutoParmFunc(expr)
 
         name = esc(name)
         SUPER = SUPER === nothing ? Any : esc(SUPER)
-        Tstruct = Tstruct === nothing ? [] : esc.(Tstruct)
         
         all_params = []
         all_params_supers = []
 
         for param in Tstruct
             @capture (param) (
-                (name_) | (name_ <: super_)
+                (param_name_ <: super_) | (param_name_)
             )
-            push!(all_params, esc(name))
-            push!(all_params_supers, esc(super))
+            push!(all_params, esc(param_name))
+            super = super === nothing ? Any : esc(super)
+            push!(all_params_supers, super)
         end
 
         out_fields = []
@@ -110,35 +110,6 @@ function AutoParmFunc(expr)
         join_expr(a,sym,b) = Expr(sym, a, b)
 
         make_conv(args...) = :(convert($(args...)))
-        function make_paramed(T, args...)
-            if isempty(args)
-                :($T)
-            else
-                :($T{$(args...)})
-            end
-        end
-
-        expr = :(
-            mutable struct $(name){$(join_expr.(all_params, :(<:), all_params_supers)...)} <: $(SUPER)
-            $(join_expr.(unesc.(out_fields), :(::), out_types)...)
-
-            function $(make_paramed(name, all_params...))($(out_fields...)) where {$(join_expr.(all_params, :(<:), all_params_supers)...)}
-                new{$(all_params...)}($(out_fields...))
-            end
-
-            function $(name)($(join_expr.(out_fields, :(::), out_types)...)) where {$(join_expr.(all_params, :(<:), all_params_supers)...)}
-                new{$(all_params...)}($(out_fields...))
-            end
-
-            function $(name)($(out_fields...))
-                $(name)($(make_conv.(out_supertypes, out_fields)...))
-            end
-
-            $out_functions
-            end)
-
-        expr.args[1] = ismutable
-        expr = striplines(expr)
 
         function field_with_default(field,default)
             if default === nothing
@@ -147,10 +118,36 @@ function AutoParmFunc(expr)
                 Expr(:kw, field, default)
             end
         end
-        
-        defaults_kwd_expr = @q begin
-            (::$Type{T})(; $(field_with_default.(out_fields, out_defaults)...)) where {T <: $name} = T($(out_fields...))
-        end
+
+        expr = :(
+            mutable struct $(name){$(join_expr.(all_params, :(<:), all_params_supers)...)} <: $(SUPER)
+                $(join_expr.(unesc.(out_fields), :(::), out_types)...)
+
+                function $(name){$(all_params...)}($(out_fields...)) where {$(join_expr.(all_params, :(<:), all_params_supers)...)}
+                    new{$(all_params...)}($(out_fields...))
+                end
+
+                function $(name)($(join_expr.(out_fields, :(::), out_types)...)) where {$(join_expr.(all_params, :(<:), all_params_supers)...)}
+                    new{$(all_params...)}($(out_fields...))
+                end
+
+                function $(name)($(out_fields...))
+                    $(name)($(make_conv.(out_supertypes, out_fields)...))
+                end
+
+                function (::$Type{T})(; $(field_with_default.(out_fields, out_defaults)...)) where {T <: $name}
+                    T($(out_fields...))
+                end
+
+                function (::$Type{T})(::Val{:constructor} ; $(field_with_default.(out_fields, out_defaults)...)) where {T <: $name}
+                    T($(out_fields...))
+                end
+
+                $out_functions
+            end)
+
+        expr.args[1] = ismutable
+        expr = striplines(expr)
 
         
         defaults_dict_inner = [:($(QuoteNode(unesc(name))) => ()->$(unesc(default))) for (name,default) in zip(out_fields,out_defaults) if default != nothing]
@@ -159,8 +156,6 @@ function AutoParmFunc(expr)
         @q begin
             Base.@__doc__ $expr
 
-            $defaults_kwd_expr
-            
             const $(esc(Symbol("AUTOPARM_",unesc(name),"_defaults"))) = $(esc(defaults_dict))
         end
     end
