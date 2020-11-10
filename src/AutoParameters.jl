@@ -50,6 +50,7 @@ function AutoParmFunc(expr)
 
         name = esc(name)
         SUPER = SUPER === nothing ? Any : esc(SUPER)
+        Tstruct = Tstruct === nothing ? [] : Tstruct
         
         all_params = []
         all_params_supers = []
@@ -148,6 +149,14 @@ function AutoParmFunc(expr)
 
         expr.args[1] = ismutable
         expr = striplines(expr)
+
+        # Remove any bad where statements
+        expr = postwalk(expr) do ex
+            if ex isa Expr && ex.head ∈ [:where,:curly] && length(ex.args) == 1
+                return ex.args[]
+            end
+            ex
+        end
 
         
         defaults_dict_inner = [:($(QuoteNode(unesc(name))) => ()->$(unesc(default))) for (name,default) in zip(out_fields,out_defaults) if default != nothing]
