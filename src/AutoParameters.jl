@@ -101,10 +101,12 @@ function AutoParmFunc(expr)
                 Tsuper = T
             end
 
+            default = default === nothing ? nothing : esc(default)
+
             push!(out_fields, esc(fieldname))
             push!(out_types, esc(T))
             push!(out_supertypes, esc(Tsuper))
-            push!(out_defaults, esc(default))
+            push!(out_defaults, default)
         end
 
         unesc(x) = x.args[]
