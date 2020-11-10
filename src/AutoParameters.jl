@@ -126,22 +126,31 @@ function AutoParmFunc(expr)
             mutable struct $(name){$(join_expr.(all_params, :(<:), all_params_supers)...)} <: $(SUPER)
                 $(join_expr.(unesc.(out_fields), :(::), out_types)...)
 
-                function $(name){$(all_params...)}($(out_fields...)) where {$(join_expr.(all_params, :(<:), all_params_supers)...)}
-                    new{$(all_params...)}($(out_fields...))
-                end
+                # Convert constructor - only if there's a single type specified
+                $(all(unesc.(out_supertypes) .== Any) ? nothing :
+                    :(function $(name)($(out_fields...))
+                            $(name)($(make_conv.(out_supertypes, out_fields)...))
+                      end)
+                  )
 
+                # Explicit param constructor - only if there are params
+                $(isempty(all_params) ? nothing :
+                    :(function $(name){$(all_params...)}($(out_fields...)) where {$(join_expr.(all_params, :(<:), all_params_supers)...)}
+                        new{$(all_params...)}($(out_fields...))
+                      end)
+                  )
+
+                # Constructor with params but correct types - this will not convert by default.
                 function $(name)($(join_expr.(out_fields, :(::), out_types)...)) where {$(join_expr.(all_params, :(<:), all_params_supers)...)}
                     new{$(all_params...)}($(out_fields...))
                 end
 
-                function $(name)($(out_fields...))
-                    $(name)($(make_conv.(out_supertypes, out_fields)...))
-                end
-
+                # Keyword constructor
                 function (::$Type{T})(; $(field_with_default.(out_fields, out_defaults)...)) where {T <: $name}
                     T($(out_fields...))
                 end
 
+                # Convenience keyword constructor that shouldn't be overwritten
                 function (::$Type{T})(::Val{:constructor} ; $(field_with_default.(out_fields, out_defaults)...)) where {T <: $name}
                     T($(out_fields...))
                 end
