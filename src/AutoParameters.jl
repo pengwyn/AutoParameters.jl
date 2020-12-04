@@ -40,6 +40,12 @@ function AutoParmFunc(expr)
             return expr
         end
 
+        unesc(x) = x.args[]
+        join_expr(a,sym,b) = Expr(sym, a, b)
+
+        make_conv(args...) = :(convert($(args...)))
+
+
         count += 1
 
         @assert @capture (combname) ( 
@@ -55,6 +61,7 @@ function AutoParmFunc(expr)
         all_params = []
         all_params_supers = []
 
+
         for param in Tstruct
             @capture (param) (
                 (param_name_ <: super_) | (param_name_)
@@ -63,6 +70,9 @@ function AutoParmFunc(expr)
             super = super === nothing ? Any : esc(super)
             push!(all_params_supers, super)
         end
+
+        explicit_params = copy(all_params)
+        explicit_params_supers = copy(all_params_supers)
 
         out_fields = []
         out_types = []
@@ -98,7 +108,12 @@ function AutoParmFunc(expr)
                 push!(all_params, esc(T))
                 push!(all_params_supers, esc(Tsuper))
             else
-                Tsuper = T
+                ind = findfirst(==(esc(T)), all_params)
+                if ind === nothing
+                    Tsuper = T
+                else
+                    Tsuper = unesc(all_params_supers[ind])
+                end
             end
 
             default = default === nothing ? nothing : esc(default)
@@ -108,11 +123,6 @@ function AutoParmFunc(expr)
             push!(out_supertypes, esc(Tsuper))
             push!(out_defaults, default)
         end
-
-        unesc(x) = x.args[]
-        join_expr(a,sym,b) = Expr(sym, a, b)
-
-        make_conv(args...) = :(convert($(args...)))
 
         function field_with_default(field,default)
             if default === nothing
@@ -126,9 +136,9 @@ function AutoParmFunc(expr)
             mutable struct $(name){$(join_expr.(all_params, :(<:), all_params_supers)...)} <: $(SUPER)
                 $(join_expr.(unesc.(out_fields), :(::), out_types)...)
 
-                # Convert constructor - only if there's a single type specified
+                # Convert constructor - only if there's a single type specified and all explicit params must also be given
                 $(all(unesc.(out_supertypes) .== Any) ? nothing :
-                    :(function $(name)($(out_fields...))
+                    :(function $(name){$(explicit_params...)}($(out_fields...)) where {$(join_expr.(explicit_params, :(<:), explicit_params_supers)...)}
                             $(name)($(make_conv.(out_supertypes, out_fields)...))
                       end)
                   )
