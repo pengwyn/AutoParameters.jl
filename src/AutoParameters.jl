@@ -67,8 +67,8 @@ function AutoParmFunc(expr)
                 (param_name_ <: super_) | (param_name_)
             )
             push!(all_params, esc(param_name))
-            super = super === nothing ? Any : esc(super)
-            push!(all_params_supers, super)
+            super = super === nothing ? Any : super
+            push!(all_params_supers, esc(super))
         end
 
         explicit_params = copy(all_params)
