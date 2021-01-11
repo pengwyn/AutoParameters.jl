@@ -1,7 +1,7 @@
 name = "AutoParameters"
 uuid = "2688778c-3549-4980-b6fe-7a9ff5c92ab2"
 authors = ["Daniel Cocks <daniel.cocks@gmail.com>"]
-version = "0.1.7"
+version = "0.1.8"
 
 [deps]
 MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"

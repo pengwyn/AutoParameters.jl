@@ -145,7 +145,7 @@ function AutoParmFunc(expr)
 
                 # Explicit param constructor - only if there are params
                 $(isempty(all_params) ? nothing :
-                    :(function $(name){$(all_params...)}($(out_fields...)) where {$(join_expr.(all_params, :(<:), all_params_supers)...)}
+                    :(function $(name){$(all_params...)}($(join_expr.(out_fields, :(::), out_types)...)) where {$(join_expr.(all_params, :(<:), all_params_supers)...)}
                         new{$(all_params...)}($(out_fields...))
                       end)
                   )
