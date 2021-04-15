@@ -78,6 +78,7 @@ function AutoParmFunc(expr)
         out_types = []
         out_defaults = []
         out_supertypes = []
+        out_supertypes_with_explicit = []
 
         out_functions = []
 
@@ -100,11 +101,13 @@ function AutoParmFunc(expr)
             if T == nothing
                 T = Any
                 Tsuper = Any
+                Tsuper_or_explicit = Any
             elseif T == :AUTO
                 T = Symbol(uppercase.("T_$(fieldname)"))
                 if Tsuper == nothing
                     Tsuper = Any
                 end
+                Tsuper_or_explicit = Tsuper
                 push!(all_params, esc(T))
                 push!(all_params_supers, esc(Tsuper))
             else
@@ -113,6 +116,11 @@ function AutoParmFunc(expr)
                     Tsuper = T
                 else
                     Tsuper = unesc(all_params_supers[ind])
+                    if ind <= length(explicit_params)
+                        Tsuper_or_explicit = T
+                    else
+                        Tsuper_or_explicit = Tsuper
+                    end
                 end
             end
 
@@ -121,6 +129,7 @@ function AutoParmFunc(expr)
             push!(out_fields, esc(fieldname))
             push!(out_types, esc(T))
             push!(out_supertypes, esc(Tsuper))
+            push!(out_supertypes_with_explicit, esc(Tsuper_or_explicit))
             push!(out_defaults, default)
         end
 
@@ -141,6 +150,13 @@ function AutoParmFunc(expr)
                     :(function $(name){$(explicit_params...)}($(out_fields...)) where {$(join_expr.(explicit_params, :(<:), explicit_params_supers)...)}
                             $(name)($(make_conv.(out_supertypes, out_fields)...))
                       end)
+                  )
+
+                # Keyword constructor with explicit params, in case the default values rely on those params
+                $(isempty(explicit_params) || isempty(out_fields) ? nothing :
+                  :(function $(name){$(explicit_params...)}(; $(field_with_default.(out_fields, out_defaults)...)) where {$(join_expr.(explicit_params, :(<:), explicit_params_supers)...)}
+                        $(name){$(explicit_params...)}($(make_conv.(out_supertypes_with_explicit, out_fields)...))
+                    end)
                   )
 
                 # Explicit param constructor - only if there are params
