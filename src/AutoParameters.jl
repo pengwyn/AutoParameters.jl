@@ -114,6 +114,7 @@ function AutoParmFunc(expr)
                 ind = findfirst(==(esc(T)), all_params)
                 if ind === nothing
                     Tsuper = T
+                    Tsuper_or_explicit = T
                 else
                     Tsuper = unesc(all_params_supers[ind])
                     if ind <= length(explicit_params)
